@@ -1,0 +1,130 @@
+import * as authService from "./auth.service.js";
+
+import ApiResponse from "../../common/utils/api-response.js";
+import ApiError from "../../common/utils/api-error.js";
+
+
+const register = async (req, res, next) => {
+  try {
+    const user = await authService.register(req.body);
+    return ApiResponse.created(
+      res,
+      "User registered successfully. Please verify your email.",
+      user
+    );
+  } catch (error) {
+    next(error); // Passes any ApiError to our global error handling middleware
+  }
+};
+
+const verifyEmail = async (req, res, next) => {
+  try {
+    // Read token from URL parameter: /verify-email/:token
+    const { token } = req.params;
+    await authService.verifyEmail(token);
+    return ApiResponse.ok(res, "Email verified successfully! You can now log in.");
+  } catch (error) {
+    next(error);
+  }
+};
+
+const login = async (req, res, next) => {
+  try {
+    const { user, accessToken, refreshToken } = await authService.login(req.body);
+    // Set Refresh Token in a secure HTTP-Only Cookie
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true, // Prevents browser JavaScript from reading the cookie (anti-XSS)
+      secure: process.env.NODE_ENV === "production", // HTTPS only in production
+      sameSite: "strict", // Protects against Cross-Site Request Forgery (CSRF)
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
+    });
+    // Send access token and user info in response body
+    return ApiResponse.ok(res, "Login successful", { user, accessToken });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+
+const getMe = async (req, res, next) => {
+  try {
+    // req.user was attached by our authenticate middleware!
+    const user = await authService.getMe(req.user.id);
+    return ApiResponse.ok(res, "User profile retrieved successfully", user);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const refreshToken = async (req, res, next) => {
+  try {
+    // Read the httpOnly cookie parsed by cookie-parser
+    const token = req.cookies?.refreshToken;
+    const { accessToken } = await authService.refresh(token);
+    return ApiResponse.ok(res, "Access token refreshed successfully", { accessToken });
+  } catch (error) {
+    next(error);
+  }
+};
+const logout = async (req, res, next) => {
+  try {
+    // req.user was attached by our authenticate middleware
+    await authService.logout(req.user.id);
+    // Clear the cookie from the user's browser
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+    });
+    return ApiResponse.ok(res, "Logged out successfully");
+  } catch (error) {
+    next(error);
+  }
+};
+
+const uploadAvatar=async(req,res)=>{
+  try{
+    const file=req.file;
+if(!file){
+  return ApiError.badRequest(res,"No file Uploaded,please send file with field name 'avatar'");
+}
+const result=await authService.avatarUpload(req.user.id,file);
+
+  return ApiResponse.ok(
+      res,
+      result,
+      "Avatar uploaded successfully"
+    );
+  }
+  
+  catch(error){
+console.error("upload error",error);
+return ApiError.internal(res,error.message || "failed to uplaod avatar");
+  }
+}
+
+const forgotPassword = async (req, res, next) => {
+  try {
+    await authService.forgotPassword(req.body.email);
+    return ApiResponse.ok(res, "Password reset email sent successfully");
+  } catch (error) {
+    next(error);   ///global error middleware will be called skiiping other 
+    /// becaue Express immediately skips normal middleware and looks for:
+//(err, req, res, next)
+  }
+};
+
+const resetPassword = async (req, res, next) => {
+  try {
+    const { token } = req.params;
+    const { password } = req.body;
+    await authService.resetPassword(token, password);
+    return ApiResponse.ok(res, "Password reset successful. You can now log in with your new password.");
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+export { register,verifyEmail ,login,getMe,refreshToken,logout,forgotPassword,resetPassword,uploadAvatar};
