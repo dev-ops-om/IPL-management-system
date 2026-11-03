@@ -9,7 +9,7 @@ class RegisterDto extends BaseDto {
       .min(8)
       .message("Password must be at least 8 characters long")
       .required(),
-    role: Joi.string().valid("customer", "seller").default("customer"),
+    role: Joi.string().valid("player", "owner","support","admin").default("customer"),
   });
 }
 
